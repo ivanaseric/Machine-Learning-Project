@@ -10,7 +10,7 @@
 
 <meta name="author" content="Ivana Seric" />
 
-<meta name="date" content="2015-10-25" />
+<meta name="date" content="2016-01-31" />
 
 <title>Practical Machine Learing: Analysis of activity data</title>
 
@@ -64,26 +64,139 @@ img {
 <div id="header">
 <h1 class="title">Practical Machine Learing: Analysis of activity data</h1>
 <h4 class="author"><em>Ivana Seric</em></h4>
-<h4 class="date"><em>October 25, 2015</em></h4>
+<h4 class="date"><em>January 31, 2016</em></h4>
 </div>
 
 
 <div id="executive-summary" class="section level2">
 <h2>Executive Summary</h2>
 <p>This is a project for Coursera Practical Machine Learing course, by Johns Hopkins Bloomberg Shool of Public Health.</p>
-<div id="background" class="section level3">
-<h3>Background</h3>
-<p>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website <a href="http://groupware.les.inf.puc-rio.br/har">here</a> (see the section on the Weight Lifting Exercise Dataset).</p>
-</div>
-</div>
-<div id="exploratory-data-analysis" class="section level2">
-<h2>Exploratory data analysis</h2>
-<p>Let’s load the data “mtcars”.</p>
+<div id="background-project-statement" class="section level3">
+<h3>Background (Project Statement)</h3>
+<p>“Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website <a href="http://groupware.les.inf.puc-rio.br/har">here</a> (see the section on the Weight Lifting Exercise Dataset).”</p>
 <pre class="r"><code>options(scipen = 1, digits = 2)
 knitr::opts_chunk$set(fig.width = 6, fig.height = 3, echo = TRUE, warning = FALSE, 
-                      message = FALSE)
+                      message = FALSE, cache = TRUE)
 library(ggplot2)
-library(GGally)</code></pre>
+library(caret)</code></pre>
+<pre><code>## Loading required package: lattice</code></pre>
+<pre class="r"><code>setwd('~/R/')</code></pre>
+</div>
+</div>
+<div id="reading-and-cleaning-the-data" class="section level2">
+<h2>Reading and cleaning the data</h2>
+<pre class="r"><code>trainingData &lt;- read.csv(&quot;~/R/Machine_learning/pml-training.csv&quot;)</code></pre>
+<p>First thing to do is to create the partition for training and testing data.</p>
+<pre class="r"><code># create partition for cross validation
+set.seed(13)
+inTrain &lt;- createDataPartition(y = trainingData$classe, p = 0.75, list = FALSE)
+training &lt;- trainingData[inTrain,]
+testing &lt;- trainingData[-inTrain,]</code></pre>
+<p>By inspecting the data set, we can see that there are many variables with most NA values. There are 67 variables with more than 75% of NA values. Removing those values will make the prediction more accurate and the training algorithm will be faster.</p>
+<pre class="r"><code>naVars &lt;- colnames(training)[colSums(is.na(training)) &gt;= 0.75*length(training$X)]
+# there are 67 of those variables -&gt; remove them from the data
+keepVars &lt;- colSums(is.na(training)) &lt; 0.75*length(training$X)
+training1 &lt;- training[keepVars]
+# we are down to 93 variables</code></pre>
+<p>There are still 93 predictors in the data set. To try to simplify it further, let’s look for the preditors with near zero variance, and remove them.</p>
+<pre class="r"><code>dropNZV &lt;- nearZeroVar(training1, saveMetrics = FALSE)
+training2 &lt;- training1[,-dropNZV ]
+# now we are down to 59 variables</code></pre>
+<p>The first 6 variables in the data set are name, raw time stamp variables and time stamp, and they will not be usefull for creating classification prediction.</p>
+<pre class="r"><code>training3 &lt;- training2[,-(1:6)]</code></pre>
+</div>
+<div id="fitting-the-model" class="section level2">
+<h2>Fitting the model</h2>
+<p>Using parallel computation even with just 3 cores reduces the computation time significantly. Random forests can do a good prediction on a classification problem, so I will try it first. I will use the cross validation for resampling method with 10 folds.</p>
+<pre class="r"><code>library(parallel)
+library(doParallel)
+cluster &lt;- makeCluster(3) 
+registerDoParallel(cluster)
+
+fitControl &lt;- trainControl(method = &quot;cv&quot;,
+                           number = 10,
+                           allowParallel = TRUE)
+timeStart &lt;- proc.time()
+fit &lt;- train(classe~., method=&quot;rf&quot;, data=training3, trControl = fitControl)
+proc.time() - timeStart</code></pre>
+<pre><code>##    user  system elapsed 
+##   37.29    0.27  795.56</code></pre>
+<pre class="r"><code>stopCluster(cluster)</code></pre>
+<pre class="r"><code>fit</code></pre>
+<pre><code>## Random Forest 
+## 
+## 14718 samples
+##    52 predictors
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (10 fold) 
+## Summary of sample sizes: 13245, 13245, 13247, 13245, 13246, 13246, ... 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy  Kappa  Accuracy SD  Kappa SD
+##    2    0.99      0.99   0.0024       0.0031  
+##   27    0.99      0.99   0.0025       0.0032  
+##   52    0.99      0.98   0.0051       0.0064  
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 2.</code></pre>
+<pre class="r"><code>confusionMatrix.train(fit)</code></pre>
+<pre><code>## Cross-Validated (10 fold) Confusion Matrix 
+## 
+## (entries are percentages of table totals)
+##  
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 28.4  0.1  0.0  0.0  0.0
+##          B  0.0 19.2  0.1  0.0  0.0
+##          C  0.0  0.0 17.3  0.3  0.0
+##          D  0.0  0.0  0.0 16.1  0.1
+##          E  0.0  0.0  0.0  0.0 18.3</code></pre>
+<p>The in-sample accuracy is 99%. Let’s check how it performs on the test set. First I will do the same transformation to the data as was done to the training set.</p>
+<pre class="r"><code>testing1 &lt;- testing[keepVars]
+testing2 &lt;- testing1[,-dropNZV ]
+testing3 &lt;- testing2[,-(1:6)]
+testPart &lt;- predict(fit, testing3)
+confusionMatrix(testPart, testing3$classe)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction    A    B    C    D    E
+##          A 1395    3    0    0    0
+##          B    0  943    8    0    0
+##          C    0    3  847   11    0
+##          D    0    0    0  793    1
+##          E    0    0    0    0  900
+## 
+## Overall Statistics
+##                                         
+##                Accuracy : 0.995         
+##                  95% CI : (0.992, 0.997)
+##     No Information Rate : 0.284         
+##     P-Value [Acc &gt; NIR] : &lt;2e-16        
+##                                         
+##                   Kappa : 0.993         
+##  Mcnemar's Test P-Value : NA            
+## 
+## Statistics by Class:
+## 
+##                      Class: A Class: B Class: C Class: D Class: E
+## Sensitivity             1.000    0.994    0.991    0.986    0.999
+## Specificity             0.999    0.998    0.997    1.000    1.000
+## Pos Pred Value          0.998    0.992    0.984    0.999    1.000
+## Neg Pred Value          1.000    0.998    0.998    0.997    1.000
+## Prevalence              0.284    0.194    0.174    0.164    0.184
+## Detection Rate          0.284    0.192    0.173    0.162    0.184
+## Detection Prevalence    0.285    0.194    0.176    0.162    0.184
+## Balanced Accuracy       1.000    0.996    0.994    0.993    0.999</code></pre>
+<p>The model performs very well on the testing set as well. Therefore, I will not try to fit any different model for this project.</p>
+<pre class="r"><code>testingData &lt;- read.csv(&quot;~/R/Machine_learning/pml-testing.csv&quot;)
+testingData1 &lt;- testingData[keepVars]
+testingData2 &lt;- testingData1[,-dropNZV ]
+testingData3 &lt;- testingData2[,-(1:6)]
+quizAns &lt;- predict(fit, testingData)</code></pre>
+<p>This model gives a perfect score on the quiz tests. :)</p>
 </div>
 
 

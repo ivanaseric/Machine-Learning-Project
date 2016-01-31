@@ -2,7 +2,7 @@
 title: 'Practical Machine Learing: Analysis of activity data'
 author: "Ivana Seric"
 date: "January 31, 2016"
-output: pdf_document
+output: html_document
 ---
 
 
@@ -63,6 +63,8 @@ The first 6 variables in the data set are name, raw time stamp variables and tim
 training3 <- training2[,-(1:6)]
 ```
 
+## Fitting the model
+ 
 Using parallel computation even with just 3 cores reduces the computation time significantly. Random forests can do a good prediction on a classification problem, so I will try it first. I will use the cross validation for resampling method with 10 folds. 
 
 ```{r parallel, cache = TRUE}
