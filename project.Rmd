@@ -1,8 +1,8 @@
 ---
-title: "Practical Machine Learing: Analysis of activity data"
+title: 'Practical Machine Learing: Analysis of activity data'
 author: "Ivana Seric"
 date: "January 31, 2016"
-output: html_document
+output: pdf_document
 ---
 
 
@@ -14,15 +14,11 @@ This is a project for Coursera Practical Machine Learing course, by Johns Hopkin
 "Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset). "
 
 
-
-
-
 ```{r code options}
 options(scipen = 1, digits = 2)
 knitr::opts_chunk$set(fig.width = 6, fig.height = 3, echo = TRUE, warning = FALSE, 
                       message = FALSE, cache = TRUE)
 library(ggplot2)
-library(GGally)
 library(caret)
 setwd('~/R/')
 ```
@@ -30,24 +26,22 @@ setwd('~/R/')
 ## Reading and cleaning the data
 
 ```{r read data}
-trainingData <- read.csv("Machine_learning/pml-training.csv")
+trainingData <- read.csv("~/R/Machine_learning/pml-training.csv")
 ```
 
 First thing to do is to create the partition for training and testing data. 
 
 ```{r data partition}
 # create partition for cross validation
-
+set.seed(13)
 inTrain <- createDataPartition(y = trainingData$classe, p = 0.75, list = FALSE)
 training <- trainingData[inTrain,]
 testing <- trainingData[-inTrain,]
 ```
 
-Inspecting the data set, there are many variables with most NA values. There are 67 variables with more than 75% of NA values. Removing those values will make the prediction more accurate and the training algorithm will be faster. 
+By inspecting the data set, we can see that there are many variables with most NA values. There are 67 variables with more than 75% of NA values. Removing those values will make the prediction more accurate and the training algorithm will be faster. 
 
 ```{r Cleaning data}
-# there are many NAs in the data, so let's check per variable
-# variable names that have more than a half NA's:
 naVars <- colnames(training)[colSums(is.na(training)) >= 0.75*length(training$X)]
 # there are 67 of those variables -> remove them from the data
 keepVars <- colSums(is.na(training)) < 0.75*length(training$X)
@@ -69,32 +63,7 @@ The first 6 variables in the data set are name, raw time stamp variables and tim
 training3 <- training2[,-(1:6)]
 ```
 
-
-```{r}
-modelFit <- train(classe ~ ., data = training3, method ="rf")
-modelFit
-confusionMatrix.train(modelFit)
-```
-
-
-
-```{r test model on the test data}
-testing1 <- testing[keepVars]
-testing2 <- testing1[,-dropNZV ]
-testing3 <- testing2[,-(1:6)]
-testPart <- predict(modelFit, testing3)
-confusionMatrix(testPart, testing3$classe)
-```
-
-```{r test cases for teh Quiz}
-testingData <- read.csv("Machine_learning/pml-testing.csv")
-testingData1 <- testingData[keepVars]
-testingData2 <- testingData1[,-dropNZV ]
-testingData3 <- testingData2[,-(1:6)]
-predict(modelFit, testingData)
-```
-
-
+Using parallel computation even with just 3 cores reduces the computation time significantly. Random forests can do a good prediction on a classification problem, so I will try it first. I will use the cross validation for resampling method with 10 folds. 
 
 ```{r parallel, cache = TRUE}
 library(parallel)
@@ -110,4 +79,32 @@ fit <- train(classe~., method="rf", data=training3, trControl = fitControl)
 proc.time() - timeStart
 stopCluster(cluster)
 ```
+
+```{r look at the model}
+fit
+confusionMatrix.train(fit)
+```
+
+The in-sample accuracy is 99%. Let's check how it performs on the test set. First I will do the same transformation to the data as was done to the training set.
+
+```{r test model on the test data}
+testing1 <- testing[keepVars]
+testing2 <- testing1[,-dropNZV ]
+testing3 <- testing2[,-(1:6)]
+testPart <- predict(fit, testing3)
+confusionMatrix(testPart, testing3$classe)
+```
+
+The model performs very well on the testing set as well. Therefore, I will not try to fit any different model for this project. 
+
+```{r test cases for teh Quiz}
+testingData <- read.csv("~/R/Machine_learning/pml-testing.csv")
+testingData1 <- testingData[keepVars]
+testingData2 <- testingData1[,-dropNZV ]
+testingData3 <- testingData2[,-(1:6)]
+quizAns <- predict(fit, testingData)
+```
+
+This model gives a perfect score on the quiz tests. :)
+
 
